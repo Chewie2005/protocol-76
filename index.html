@@ -101,18 +101,30 @@ h2{font-family:var(--body);font-size:13px;font-weight:400;letter-spacing:.05em;t
 .tick.y{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
 .tick:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .optgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.opt{position:relative;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:10px;cursor:pointer;color:var(--ink);font-family:var(--body)}
+.opt{position:relative;text-align:left;background:var(--card);border:1.5px solid var(--line);border-radius:12px;padding:10px 30px 10px 10px;cursor:pointer;color:var(--ink);font-family:var(--body)}
 .opt .nm{font-size:13.5px;font-weight:600;display:block}
 .opt .mac{font-family:var(--mono);font-size:11px;color:var(--faint);display:block;margin-top:2px}
 .opt .tag{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--warn);display:block;margin-top:2px}
 .opt.sel{border-color:var(--accent);background:var(--accent-soft)}
 .opt.sel .nm{color:var(--accent)}
-.opt:disabled{opacity:.45;cursor:not-allowed}
+.opt.blocked{opacity:.45;cursor:not-allowed}
 .opt:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.info-btn{position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;border:none;
+  background:rgba(120,120,128,.16);color:var(--mut);font-size:13px;line-height:22px;text-align:center;cursor:pointer;padding:0}
+.info-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.daystrip{display:flex;gap:6px;margin:4px 0 12px;overflow-x:auto}
+.daystrip button{flex:1;min-width:40px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 0;
+  font-family:var(--mono);font-size:12px;color:var(--mut);cursor:pointer}
+.daystrip button.sel{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.daystrip button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .mealhead{display:flex;justify-content:space-between;align-items:baseline;margin:16px 0 8px}
 .mealhead h3{font-family:var(--disp);font-size:15px;margin:0}
 .mealhead .mono{font-family:var(--mono);font-size:12px;color:var(--faint)}
 .advice{font-size:13px;color:var(--mut);background:var(--card);border:1px dashed var(--line);border-radius:10px;padding:8px 10px;margin:8px 0}
+.shoplist{list-style:none;margin:0;padding:0}
+.shoplist li{display:flex;justify-content:space-between;padding:7px 2px;border-bottom:.5px solid var(--line);font-size:14px}
+.shoplist li:last-child{border-bottom:none}
+.shoplist .q{font-family:var(--mono);color:var(--mut);white-space:nowrap;padding-left:10px}
 .statgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
 .stat .l{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
@@ -182,7 +194,7 @@ textarea.io{width:100%;height:90px;background:var(--card);border:1px solid var(-
 }
 @media (prefers-reduced-motion: no-preference){
   .opt,.tick,.btn,nav.tabs button,.chip,.exname-btn{transition:transform .12s ease-out,background-color .18s ease,border-color .18s ease,color .18s ease}
-  .opt:active:not(:disabled),.btn:active,.tick:active,.exname-btn:active{transform:scale(.96)}
+  .opt:active:not(.blocked),.btn:active,.tick:active,.exname-btn:active{transform:scale(.96)}
   nav.tabs button:active{transform:scale(.94)}
   .exsheet-bg,.exsheet{transition:opacity .25s ease,transform .32s cubic-bezier(.25,.8,.35,1)}
 }
@@ -215,16 +227,22 @@ textarea.io{width:100%;height:90px;background:var(--card);border:1px solid var(-
   <div id="syncbox"></div>
   <div id="alertbox"></div>
   <div id="hero" class="hero"></div>
+  <div class="card" id="hydration"></div>
   <ul class="tl" id="timeline"></ul>
   <div class="foot">Tap the square when a block is done. Cutoffs in amber are hard rules, not suggestions.</div>
 </section>
 
 <section class="tab" id="tab-meals">
+  <div class="daystrip" id="meal-daystrip"></div>
   <div id="meal-advice"></div>
   <div id="meal-slots"></div>
   <h2>This week's balance</h2>
   <div class="statgrid" id="meal-stats"></div>
-  <div class="foot">Every option in a slot has matched macros — any combo lands on ~3,000 kcal / 150 g protein.</div>
+  <div class="foot">Every option in a slot has matched macros — any combo lands on ~3,000 kcal / 150 g protein. Tap the ⓘ on any option for its ingredients.</div>
+  <h2>Snacks this week</h2>
+  <ul class="tl" id="snack-week"></ul>
+  <h2>Shopping list — this week</h2>
+  <div class="card" id="shopping-list"></div>
 </section>
 
 <section class="tab" id="tab-train">
@@ -349,6 +367,23 @@ var MEALS={
     ["d5","Tacos","850 kcal · 44 P","","🌮"],
     ["d6","Shrimp pasta","840 kcal · 45 P","","🍝"]]}
 };
+var INGREDIENTS={
+  b1:[["Rice (cooked)",200,"g"],["Mince (beef/pork/lamb)",150,"g"],["Banana",1,"ct"],["Milk",400,"ml"]],
+  b2:[["Tortillas / wraps",2,"ct"],["Smoked salmon",100,"g"],["Avocado",0.5,"ct"],["Cucumber",0.25,"ct"],["Milk",400,"ml"]],
+  b3:[["Baguette",0.33,"ct"],["Smoked salmon",100,"g"],["Kiwi / strawberries",1,"x"],["Milk",400,"ml"]],
+  b4:[["Croissant",1,"ct"],["Honey",1,"tbsp"],["Strawberries",1,"x"],["Smoked salmon",100,"g"],["Milk",400,"ml"]],
+  l1:[["Mince (beef/pork/lamb)",250,"g"],["Rice (cooked)",250,"g"],["Broccoli / cherry tomatoes / snap peas",1,"x"],["Olive oil",1,"tbsp"]],
+  l2:[["Mince (beef/pork/lamb)",250,"g"],["Rice (cooked)",250,"g"],["Peppers & onions (roasted)",1,"x"],["Avocado",0.5,"ct"],["Salsa / hot sauce",1,"x"]],
+  l3:[["Beef/lamb stew",300,"g"],["Rice (cooked)",250,"g"]],
+  l4:[["Tortillas / wraps",2,"ct"],["Mince (beef/pork/lamb)",200,"g"],["Cucumber, tomato, onion",1,"x"],["Olive oil",1,"tbsp"]],
+  d1:[["Sushi rice pouch",1,"ct"],["Sushi-grade salmon",150,"g"],["Edamame",1,"x"],["Avocado",0.5,"ct"],["Soy sauce",1,"x"]],
+  d2:[["Steak",250,"g"],["Rice (cooked)",200,"g"],["Salad / cherry tomatoes",1,"x"],["Olive oil",1,"tbsp"]],
+  d3:[["Pork strips / duck / turkey",200,"g"],["Peppers, green beans, carrot, onion",1,"x"],["Rice (cooked)",200,"g"],["Soy sauce",1,"x"]],
+  d4:[["Mince (beef/pork/lamb)",250,"g"],["Tortillas / wraps",1,"ct"],["Salad",1,"x"],["Avocado",0.5,"ct"]],
+  d5:[["Mince (beef/pork/lamb)",200,"g"],["Tortillas / wraps",3,"ct"],["Peppers & onions (roasted)",1,"x"],["Salsa / hot sauce",1,"x"]],
+  d6:[["Frozen shrimp",150,"g"],["Pasta",100,"g"],["Frozen veg",1,"x"]]
+};
+var SNACK_ROT={1:"Banana",2:"Clementines",3:"Grapes",4:"Strawberries",5:"Cherries",6:"Kiwi",0:"Apple"};
 var SESSIONS={
   1:{name:"Day A — full body (upper focus)",kind:"lift",ex:[
     ["Back squat / leg press","3 × 6–8","squat"],["Flat bench press","4 × 6–8","bench"],["Chest-supported row","3 × 8–10","row_cs"],
@@ -395,7 +430,18 @@ var EMO={wake:["☀️","cut"],bfast:["🥣","meal"],train:["🏋️","train"],l
   snack:["🍌","meal"],dinner:["🍽️","meal"],food:["⏳","cut"],fluids:["💧","cut"],
   screens:["📵","eve"],bed:["😴","eve"]};
 var lastPop=null;
+function renderHydration(){
+  var wd=dow(),saunaDay=(SESSIONS[wd].kind==="lift"||wd===6);
+  document.getElementById("hydration").innerHTML=
+    '<div style="display:flex;justify-content:space-between;gap:10px">'
+    +'<div><div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)">Water</div><div style="font-size:18px;font-weight:600">~2.5 L</div></div>'
+    +'<div><div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)">Milk</div><div style="font-size:18px;font-weight:600">750 mL</div></div>'
+    +'<div><div style="font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint)">Total</div><div style="font-size:18px;font-weight:600">~3.25 L</div></div>'
+    +'</div><div style="font-size:12.5px;color:var(--mut);margin-top:8px">Spread through the day, stop big fluids by 20:30.'
+    +(saunaDay?" +1 L extra electrolyte water after sauna today.":"")+'</div>';
+}
 function renderToday(){
+  renderHydration();
   var names=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
   var s=schedule(),t=today(),nm=NOW.getHours()*60+NOW.getMinutes();
   var tickable=s.filter(function(b){return !b[4]});
@@ -443,15 +489,57 @@ function weekMealCounts(){
       if(opt[3]==="treat"){c.treat++;c.croissant++}});});
   return c;
 }
+var planWD=dow();
+function dateForWD(wd){var keys=weekKeys();return keys[wd===0?6:wd-1]}
+function renderDaystrip(){
+  var order=[1,2,3,4,5,6,0],cur=dow(),html="";
+  order.forEach(function(wd){
+    html+='<button class="'+(wd===planWD?"sel":"")+'" data-wd="'+wd+'">'+DNAMES[wd]+(wd===cur?" •":"")+'</button>';
+  });
+  document.getElementById("meal-daystrip").innerHTML=html;
+  document.querySelectorAll("#meal-daystrip button").forEach(function(btn){
+    btn.onclick=function(){planWD=+btn.getAttribute("data-wd");renderMeals();};
+  });
+}
+function fracLabel(n){if(n===0.5)return"½";if(Math.abs(n-1/3)<0.01)return"⅓";if(n===0.25)return"¼";return String(n)}
+function fmtQtySingle(amt,unit){
+  if(unit==="g")return amt+" g";
+  if(unit==="ml")return amt+" ml";
+  if(unit==="tbsp")return amt+(amt===1?" tbsp":" tbsp");
+  if(unit==="ct")return fracLabel(amt);
+  return "";
+}
+function fmtQtyTotal(amt,unit,xcount){
+  if(unit==="x")return xcount+"×";
+  var n=Math.round(amt*100)/100;
+  if(unit==="g")return n+" g";
+  if(unit==="ml")return n+" ml";
+  if(unit==="tbsp")return n+" tbsp";
+  if(unit==="ct")return n+"×";
+  return String(n);
+}
+function openMealInfo(id,label){
+  var items=INGREDIENTS[id]||[];
+  var body='<h3 style="text-transform:none">'+label+'</h3><ol>'
+    +items.map(function(it){var pfx=it[2]==="x"?"":fmtQtySingle(it[1],it[2])+" ";return "<li>"+pfx+it[0]+"</li>";}).join('')
+    +'</ol>';
+  document.getElementById("exsheet-body").innerHTML=
+    '<div style="display:flex;justify-content:flex-end;margin:-2px 0 4px"><button class="btn ghost" id="ex-done" style="padding:6px 14px;font-size:13px">Done</button></div>'
+    +body;
+  document.getElementById("ex-done").onclick=closeEx;
+  document.getElementById("exsheet-bg").classList.add("on");
+}
 function renderMeals(){
-  var t=today(),c=weekMealCounts(),host=document.getElementById("meal-slots");host.innerHTML="";
+  renderDaystrip();
+  var planKey=dateForWD(planWD),t=day(planKey),c=weekMealCounts(),host=document.getElementById("meal-slots");host.innerHTML="";
   var daysLeft=7-((dow()+6)%7); // incl today
   var adv=[];
+  adv.push("Planning <b>"+DNAMES[planWD]+"</b>.");
   if(c.poke<2&&daysLeft<=(2-c.poke)+1)adv.push("You still need "+(2-c.poke)+" poke dinner"+(2-c.poke>1?"s":"")+" this week for omega-3 — schedule them.");
   else if(c.poke<2)adv.push("Poke dinners so far: "+c.poke+"/2 minimum (target 2–3).");
   if(c.salmon>=3)adv.push("Smoked salmon is at "+c.salmon+"/3 — cap reached, pick other breakfasts.");
   if(c.treat>=2)adv.push("Treat budget used ("+c.treat+"/2). No more croissants or tempura this week.");
-  if(!adv.length)adv.push("Week is balanced so far. Pick freely — every combo carries the same macros.");
+  if(adv.length===1)adv.push("Week is balanced so far. Pick freely — every combo carries the same macros.");
   document.getElementById("meal-advice").innerHTML='<div class="advice">'+adv.join(" ")+'</div>';
   ["b","l","d"].forEach(function(slot){
     var m=MEALS[slot];
@@ -459,19 +547,71 @@ function renderMeals(){
     hd.innerHTML="<h3>"+m.label+"</h3><span class='mono'>"+m.target+"</span>";host.appendChild(hd);
     var g=document.createElement("div");g.className="optgrid";
     m.opts.forEach(function(o){
-      var b=document.createElement("button");b.className="opt"+(t.meals[slot]===o[0]?" sel":"");
       var blocked=(o[3]==="salmon"&&c.salmon>=3&&t.meals[slot]!==o[0])||(o[3]==="treat"&&c.treat>=2&&t.meals[slot]!==o[0]);
-      if(blocked)b.disabled=true;
+      var b=document.createElement("div");
+      b.className="opt"+(t.meals[slot]===o[0]?" sel":"")+(blocked?" blocked":"");
+      b.setAttribute("role","button");b.setAttribute("tabindex","0");
+      b.setAttribute("aria-label",o[1]+(blocked?" (unavailable)":""));
       b.innerHTML='<span class="mico" aria-hidden="true">'+(o[4]||"")+'</span><span class="nm">'+o[1]+'</span><span class="mac">'+o[2]+'</span>'+
-        (o[3]==="treat"?'<span class="tag">treat · 1×/wk</span>':o[3]==="poke"?'<span class="tag" style="color:var(--accent)">omega-3</span>':'');
-      b.onclick=function(){t.meals[slot]=(t.meals[slot]===o[0])?null:o[0];save();renderMeals();renderWeek();};
+        (o[3]==="treat"?'<span class="tag">treat · 1×/wk</span>':o[3]==="poke"?'<span class="tag" style="color:var(--accent)">omega-3</span>':'')+
+        '<button class="info-btn" aria-label="Ingredients for '+o[1]+'">ⓘ</button>';
+      var pick=function(){if(blocked)return;t.meals[slot]=(t.meals[slot]===o[0])?null:o[0];save();renderMeals();renderWeek();};
+      b.onclick=pick;
+      b.onkeydown=function(ev){if(ev.key==="Enter"||ev.key===" "){ev.preventDefault();pick();}};
       g.appendChild(b);
     });
     host.appendChild(g);
   });
+  var slotOrder=[].concat(MEALS.b.opts,MEALS.l.opts,MEALS.d.opts);
+  host.querySelectorAll(".info-btn").forEach(function(btn,i){
+    var o=slotOrder[i];
+    btn.onclick=function(ev){ev.stopPropagation();openMealInfo(o[0],o[1]);};
+  });
   var sg=document.getElementById("meal-stats");
   sg.innerHTML=stat("Poke dinners",c.poke,"2–3",c.poke>=2)+stat("Smoked salmon",c.salmon,"≤3",c.salmon<=3,c.salmon>3)+
     stat("Treats",c.treat,"≤2",c.treat<=2,c.treat>2)+stat("Days planned",weekKeys().filter(function(k){var d=state.days[k];return d&&d.meals.d}).length,"7",false);
+  renderSnackWeek();
+  renderShoppingList();
+}
+function renderSnackWeek(){
+  var order=[1,2,3,4,5,6,0],cur=dow();
+  var html=order.map(function(wd){
+    return '<li'+(wd===cur?' class="now"':'')+'><span class="t">'+DNAMES[wd]+'</span>'
+      +'<div class="body"><div class="n">'+SNACK_ROT[wd]+' + almonds/walnuts + milk</div></div></li>';
+  }).join("");
+  document.getElementById("snack-week").innerHTML=html;
+}
+function addQty(totals,name,amt,unit){
+  var key=name+"‹"+unit;
+  if(!totals[key])totals[key]={name:name,unit:unit,amt:0,x:0};
+  if(unit==="x")totals[key].x++;else totals[key].amt+=amt;
+}
+function buildShoppingList(){
+  var totals={},planned=0,slots=0;
+  weekKeys().forEach(function(k){
+    var d=state.days[k];
+    ["b","l","d"].forEach(function(slot){
+      slots++;
+      var id=d&&d.meals&&d.meals[slot];
+      if(!id)return;
+      planned++;
+      (INGREDIENTS[id]||[]).forEach(function(it){addQty(totals,it[0],it[1],it[2]);});
+    });
+    var wd=new Date(k+"T12:00").getDay();
+    addQty(totals,SNACK_ROT[wd],1,"ct");
+    addQty(totals,"Almonds / walnuts",30,"g");
+    addQty(totals,"Milk",250,"ml");
+  });
+  return {totals:totals,planned:planned,slots:slots};
+}
+function renderShoppingList(){
+  var r=buildShoppingList();
+  var rows=Object.keys(r.totals).map(function(k){return r.totals[k]}).sort(function(a,b){return a.name<b.name?-1:1});
+  var html=rows.map(function(t){
+    return '<li><span>'+t.name+'</span><span class="q">'+fmtQtyTotal(t.amt,t.unit,t.x)+'</span></li>';
+  }).join("");
+  document.getElementById("shopping-list").innerHTML='<ul class="shoplist">'+html+'</ul>'
+    +'<div style="font-size:12px;color:var(--faint);margin-top:8px">Totals from '+r.planned+' of '+r.slots+' meals planned this week (snacks always included, day-rotated). Plan more days above for a complete list.</div>';
 }
 function stat(l,v,tgt,hit,over){
   return '<div class="stat'+(over?" over":hit?" hit":"")+'"><div class="l">'+l+'</div><div class="v">'+v+' <small>/ '+tgt+'</small></div></div>';
