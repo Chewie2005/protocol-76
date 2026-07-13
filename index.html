@@ -239,6 +239,8 @@ textarea.io{width:100%;height:90px;background:var(--card);border:1px solid var(-
 </section>
 
 <section class="tab" id="tab-week">
+  <h2>This week ahead</h2>
+  <ul class="tl" id="week-plan"></ul>
   <h2>Week scoreboard</h2>
   <div class="statgrid" id="week-stats"></div>
   <h2>Morning weight</h2>
@@ -518,7 +520,18 @@ function lastLog(id){
 }
 
 /* ---------- week ---------- */
+var DNAMES={0:"Sun",1:"Mon",2:"Tue",3:"Wed",4:"Thu",5:"Fri",6:"Sat"};
+function renderWeekPlan(){
+  var order=[1,2,3,4,5,6,0],cur=dow(),html="";
+  order.forEach(function(wd){
+    var s=SESSIONS[wd];
+    html+='<li class="'+(wd===cur?"now":"")+'"><span class="t">'+DNAMES[wd]+'</span>'
+      +'<div class="body"><div class="n">'+s.name+'</div><div class="d">'+trainLoc(wd)+'</div></div></li>';
+  });
+  document.getElementById("week-plan").innerHTML=html;
+}
 function renderWeek(){
+  renderWeekPlan();
   var lifts=0,cardio=0,sauna=0,beds=0;
   weekKeys().forEach(function(k){var d=state.days[k];if(!d)return;
     if(d.sauna)sauna++;
