@@ -267,6 +267,7 @@ textarea.io{width:100%;height:90px;background:var(--card);border:1px solid var(-
     <button class="btn" id="wt-save">Log</button><span class="prev" id="wt-today"></span></div>
     <div class="verdict" id="wt-verdict"></div>
   </div>
+  <div class="card" id="weight-chart"></div>
   <h2>Appearance</h2>
   <div class="card win" style="justify-content:space-between">
     <div style="font-size:16px">Night mode</div>
@@ -643,7 +644,7 @@ function renderTrain(){
   });
   host.querySelectorAll("[data-exi]").forEach(function(btn){
     var i=+btn.getAttribute("data-exi");
-    btn.onclick=function(){openEx(s.ex[i][2]);};
+    btn.onclick=function(){openEx(s.ex[i][2],"e"+dow()+"_"+i);};
   });
   document.getElementById("sess-tick").onclick=function(){t.checks["session"]=!t.checks["session"];save();renderTrain();renderWeek();};
   var st=document.getElementById("sauna-tick");
@@ -657,6 +658,74 @@ function lastLog(id){
   for(var i=0;i<ks.length;i++){if(ks[i]===dkey(NOW))continue;
     var d=state.days[ks[i]];if(d&&d.logs&&d.logs[id]&&d.logs[id].w)return d.logs[id]}
   return null;
+}
+
+/* ---------- trend chart (weight / exercise progress) ---------- */
+function trendChart(values,opts){
+  opts=opts||{};
+  var fmt=opts.fmt||function(v){return String(v)};
+  var n=values.length;
+  if(n<2)return{html:'<div style="font-size:13px;color:var(--mut);padding:20px 4px;text-align:center">'+(opts.empty||"Log a few entries to see your trend.")+'</div>',wire:function(){}};
+  var W=600,H=132,padL=34,padR=10,padT=14,padB=20,iw=W-padL-padR,ih=H-padT-padB;
+  var vs=values.map(function(p){return p.v});
+  var lo=Math.min.apply(null,vs),hi=Math.max.apply(null,vs);
+  if(lo===hi){lo-=1;hi+=1}
+  var pv=(hi-lo)*0.15;lo-=pv;hi+=pv;
+  function X(i){return n===1?padL+iw/2:padL+i/(n-1)*iw}
+  function Y(v){return padT+ih-(v-lo)/(hi-lo)*ih}
+  var pts=values.map(function(p,i){return[X(i),Y(p.v)]});
+  var d="M"+pts.map(function(p){return p[0].toFixed(1)+","+p[1].toFixed(1)}).join(" L");
+  var areaD=d+" L"+pts[n-1][0].toFixed(1)+","+(padT+ih)+" L"+pts[0][0].toFixed(1)+","+(padT+ih)+" Z";
+  var gl=[lo+(hi-lo)*0.25,lo+(hi-lo)*0.75];
+  var last=values[n-1];
+  var endAnchor=pts[n-1][0]>W-60?"end":"middle";
+  var html='<svg viewBox="0 0 '+W+' '+H+'" style="width:100%;height:'+H+'px;display:block;touch-action:pan-y">'
+    +gl.map(function(gv){var gy=Y(gv);return '<line x1="'+padL+'" y1="'+gy.toFixed(1)+'" x2="'+(W-padR)+'" y2="'+gy.toFixed(1)+'" stroke="var(--line)" stroke-width="1"/>'
+      +'<text x="2" y="'+(gy+3).toFixed(1)+'" font-size="9.5" fill="var(--faint)" font-family="ui-monospace,monospace">'+fmt(gv)+'</text>';}).join('')
+    +'<path d="'+areaD+'" fill="var(--accent)" opacity="0.08"/>'
+    +'<path d="'+d+'" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'
+    +'<circle cx="'+pts[n-1][0].toFixed(1)+'" cy="'+pts[n-1][1].toFixed(1)+'" r="4.5" fill="var(--accent)" stroke="var(--card)" stroke-width="2"/>'
+    +'<text x="'+Math.max(padL+2,Math.min(W-padR-2,pts[n-1][0])).toFixed(1)+'" y="'+Math.max(11,pts[n-1][1]-9).toFixed(1)+'" font-size="12" font-weight="600" fill="var(--ink)" font-family="ui-monospace,monospace" text-anchor="'+endAnchor+'">'+fmt(last.v)+'</text>'
+    +'<circle class="chit" cx="0" cy="0" r="5" fill="var(--accent)" stroke="var(--card)" stroke-width="2" style="display:none"/>'
+    +'<rect class="chit-area" x="0" y="0" width="'+W+'" height="'+H+'" fill="transparent"/>'
+    +'<text x="'+padL+'" y="'+(H-4)+'" font-size="9.5" fill="var(--faint)" font-family="ui-monospace,monospace">'+values[0].label+'</text>'
+    +'<text x="'+(W-padR)+'" y="'+(H-4)+'" font-size="9.5" fill="var(--faint)" font-family="ui-monospace,monospace" text-anchor="end">'+last.label+'</text>'
+    +'</svg><div class="chart-readout" style="font-size:12px;color:var(--mut);text-align:center;min-height:16px;margin-top:2px">'+(opts.sub||"")+'</div>';
+  function wire(container){
+    var svg=container.querySelector("svg");if(!svg)return;
+    var area=svg.querySelector(".chit-area"),dot=svg.querySelector(".chit"),readout=container.querySelector(".chart-readout");
+    function handle(clientX){
+      var rect=svg.getBoundingClientRect();
+      var relX=(clientX-rect.left)/rect.width*W;
+      var t=Math.max(0,Math.min(1,(relX-padL)/iw));
+      var idx=Math.round(t*(n-1)),p=values[idx],xy=pts[idx];
+      dot.setAttribute("cx",xy[0]);dot.setAttribute("cy",xy[1]);dot.style.display="";
+      readout.textContent=p.label+" — "+fmt(p.v);
+    }
+    area.addEventListener("click",function(e){handle(e.clientX)});
+    area.addEventListener("touchstart",function(e){if(e.touches[0])handle(e.touches[0].clientX)},{passive:true});
+  }
+  return{html:html,wire:wire};
+}
+function buildWeightSeries(){
+  var entries=Object.keys(state.days).filter(function(k){return state.days[k].weight}).sort();
+  return entries.map(function(k,i){
+    var lo=Math.max(0,i-6),s=0,n=0;
+    for(var j=lo;j<=i;j++){s+=+state.days[entries[j]].weight;n++}
+    var dt=new Date(k+"T12:00");
+    return{label:dt.toLocaleDateString("en",{month:"short",day:"numeric"}),v:s/n};
+  });
+}
+function exerciseSeries(exId){
+  var ks=Object.keys(state.days).sort(),pts=[];
+  ks.forEach(function(k){
+    var d=state.days[k];
+    if(d&&d.logs&&d.logs[exId]&&d.logs[exId].w){
+      var dt=new Date(k+"T12:00");
+      pts.push({label:dt.toLocaleDateString("en",{month:"short",day:"numeric"}),v:+d.logs[exId].w});
+    }
+  });
+  return pts;
 }
 
 /* ---------- week ---------- */
@@ -687,6 +756,9 @@ function renderWeek(){
   var t=today();
   document.getElementById("wt-today").textContent=t.weight?("Today: "+t.weight+" kg"):"";
   document.getElementById("wt-verdict").innerHTML=weightVerdict();
+  var wSeries=buildWeightSeries(),wHost=document.getElementById("weight-chart");
+  var wChart=trendChart(wSeries,{fmt:function(v){return v.toFixed(1)+" kg"},sub:"Tap the line for any day's 7-day average",empty:"Log a few mornings to see your weight trend."});
+  wHost.innerHTML=wChart.html;wChart.wire(wHost);
 }
 function weightVerdict(){
   var entries=Object.keys(state.days).filter(function(k){return state.days[k].weight}).sort();
@@ -768,7 +840,7 @@ function renderSync(){
 function tagHtml(text,muted){
   return '<span class="tag2" style="background:'+(muted?"rgba(120,120,128,.14)":"var(--accent-soft)")+';color:'+(muted?"var(--mut)":"var(--accent)")+'">'+text+'</span>';
 }
-function openEx(key){
+function openEx(key,exId){
   var keys=Array.isArray(key)?key:[key];
   var body=keys.map(function(k){
     var e=EXDB[k];if(!e)return"";
@@ -776,10 +848,16 @@ function openEx(key){
       +e.sec.map(function(m){return tagHtml(m,true)}).join("")+'</div>'
       +'<ol>'+e.s.map(function(st){return "<li>"+st+"</li>"}).join("")+'</ol>';
   }).join('<hr>');
+  var chartObj=null;
+  if(exId){
+    chartObj=trendChart(exerciseSeries(exId),{fmt:function(v){return v+" kg"},sub:"Tap the line for any session",empty:"Log a couple of sessions to see your progress here."});
+    body+='<hr><h3 style="text-transform:none">Progress</h3><div id="ex-chart">'+chartObj.html+'</div>';
+  }
   document.getElementById("exsheet-body").innerHTML=
     '<div style="display:flex;justify-content:flex-end;margin:-2px 0 4px"><button class="btn ghost" id="ex-done" style="padding:6px 14px;font-size:13px">Done</button></div>'
     +body+'<div style="font-size:11px;color:var(--faint);margin-top:18px">Exercise reference: hasaneyldrm/exercises-dataset (MIT, text only — no images)</div>';
   document.getElementById("ex-done").onclick=closeEx;
+  if(chartObj)chartObj.wire(document.getElementById("ex-chart"));
   document.getElementById("exsheet-bg").classList.add("on");
 }
 function closeEx(){document.getElementById("exsheet-bg").classList.remove("on");}
